@@ -2,8 +2,10 @@ import requests
 import pandas as pd
 import json
 from datetime import datetime, timezone
+from pathlib import Path
 
 
+DATA_DIR = Path(__file__).resolve().parent.parent / "data"
 STATUS_URL = "https://toronto.publicbikesystem.net/customer/gbfs/v2/en/station_status"
 
 COLUMN_TYPES = {
@@ -45,10 +47,25 @@ def build_status_df(feed, fetched_at):
     return df
 
 
+def save_snapshot(df, fetched_at):
+    folder = DATA_DIR / "station_status" / f"date={fetched_at:%Y-%m-%d}"
+    folder.mkdir(parents=True, exist_ok=True)
+
+    final_path = folder / f"{fetched_at:%Y%m%dT%H%M%SZ}.parquet"
+    tmp_path = folder / f"{fetched_at:%Y%m%dT%H%M%SZ}.parquet.tmp"
+
+    df.to_parquet(tmp_path, index=False)
+    tmp_path.rename(final_path)
+    return final_path
+
+
 if __name__ == "__main__":
     fetched_at = datetime.now(timezone.utc)
     feed = fetch_feed(STATUS_URL)
     df = build_status_df(feed, fetched_at)
-    print(df.dtypes)
-    print(df.head())
-    
+    path = save_snapshot(df, fetched_at)
+    print("Saved to", path)
+
+    check = pd.read_parquet(path)
+    print(check.shape)
+    print(check.dtypes)
