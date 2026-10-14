@@ -3,7 +3,7 @@
 Saves a station_status snapshot every minute (Parquet) and the
 station_information and vehicle_types feeds once a day (raw JSON).
 """
-
+import os
 import json
 import logging
 import time
@@ -14,7 +14,7 @@ import pandas as pd
 import requests
 
 
-DATA_DIR = Path(__file__).resolve().parent.parent / "data"
+DATA_DIR = Path(os.environ.get("DATA_DIR", Path(__file__).resolve().parent.parent / "data"))
 STATUS_URL = "https://toronto.publicbikesystem.net/customer/gbfs/v2/en/station_status"
 DAILY_FEED_URLS = {
     "station_information": "https://toronto.publicbikesystem.net/customer/gbfs/v2/en/station_information",
