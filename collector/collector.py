@@ -14,7 +14,7 @@ import pandas as pd
 import requests
 
 
-DATA_DIR = Path(os.environ.get("DATA_DIR", Path(__file__).resolve().parent.parent / "data"))
+DATA_DIR = Path(os.environ.get("DATA_DIR", "../data"))
 STATUS_URL = "https://toronto.publicbikesystem.net/customer/gbfs/v2/en/station_status"
 DAILY_FEED_URLS = {
     "station_information": "https://toronto.publicbikesystem.net/customer/gbfs/v2/en/station_information",
@@ -153,17 +153,60 @@ def save_daily_feed(name, feed, fetched_at):
 
 
 def collect_daily_feeds():
-    """Fetch and save every feed in DAILY_FEED_URLS.
-
-    Returns:
-        A list of the saved file Paths.
-    """
+    """Fetch and save every feed in DAILY_FEED_URLS."""
     fetched_at = datetime.now(timezone.utc)
-    paths = []
     for name, url in DAILY_FEED_URLS.items():
         feed = fetch_feed(url)
-        paths.append(save_daily_feed(name, feed, fetched_at))
-    return paths
+        save_daily_feed(name, feed, fetched_at)
+
+
+def merge_day(folder):
+    """Merge one finished day's snapshots into a single data.parquet.
+
+    Reads every Parquet file in the folder (small snapshot files and any
+    existing data.parquet), drops duplicate rows, writes data.parquet and
+    deletes the small files. Safe to run more than once on the same folder.
+
+    Args:
+        folder: Path of a date=YYYY-MM-DD folder.
+
+    Returns:
+        The Path of data.parquet, or None if there was nothing to merge.
+    """
+    files = sorted(folder.glob("*.parquet"))
+    small_files = [f for f in files if f.name != "data.parquet"]
+    if not small_files:
+        return None
+
+    df = pd.concat([pd.read_parquet(f) for f in files], ignore_index=True)
+    df = df.drop_duplicates(subset=["fetched_at", "station_id"])
+    df = df.sort_values(["fetched_at", "station_id"])
+
+    final_path = folder / "data.parquet"
+    tmp_path = folder / "data.parquet.tmp"
+    df.to_parquet(tmp_path, index=False)
+    tmp_path.rename(final_path)
+
+    for f in small_files:
+        f.unlink()
+    for f in folder.glob("*.tmp"):
+        f.unlink()
+    return final_path
+
+
+def merge_finished_days():
+    """Merge every station_status day folder from before today (UTC).
+
+    Returns:
+        The names of the folders that were merged, e.g. ["date=2026-10-13"].
+    """
+    today = f"date={datetime.now(timezone.utc):%Y-%m-%d}"
+    merged = []
+    for folder in sorted((DATA_DIR / "station_status").glob("date=*")):
+        if folder.name < today:
+            if merge_day(folder):
+                merged.append(folder.name)
+    return merged
 
 
 def main():
@@ -185,11 +228,17 @@ def main():
         today = datetime.now(timezone.utc).date()
         if today != last_daily_date:
             try:
-                paths = collect_daily_feeds()
+                collect_daily_feeds()
                 last_daily_date = today
-                log.info("Saved daily feeds: %s", [f"{p.parent.name}/{p.name}" for p in paths])
+                log.info("Saved daily feeds")
             except Exception:
                 log.exception("Daily feed collection failed")
+
+            try:
+                merged = merge_finished_days()
+                log.info("Merged %d day(s): %s", len(merged), merged)
+            except Exception:
+                log.exception("Merge failed")
 
         time.sleep(60 - time.time() % 60)
 
