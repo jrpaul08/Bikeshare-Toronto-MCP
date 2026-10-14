@@ -31,8 +31,10 @@ The collector runs 24/7 in Docker on a Raspberry Pi and keeps going if a request
 ```
 data/
 ├── station_status/
-│   └── date=2026-10-14/
-│       ├── 20261014T142300Z.parquet   # one file per snapshot
+│   ├── date=2026-10-14/
+│   │   └── data.parquet               # finished day, merged into one file
+│   └── date=2026-10-15/
+│       ├── 20261015T142300Z.parquet   # today: one file per snapshot
 │       └── ...
 ├── station_information/
 │   └── 2026-10-14.json
@@ -41,6 +43,7 @@ data/
 ```
 
 - All times and dates are **UTC**.
+- Each snapshot is saved as its own small file. After midnight UTC, the collector merges every finished day into a single `data.parquet` (removing any duplicate rows).
 - `date=` folders let pandas load every day at once and filter by date:
   ```python
   pd.read_parquet("data/station_status", filters=[("date", ">=", "2026-11-01")])
@@ -73,6 +76,19 @@ uv run collector.py
 
 Stop with `Ctrl+C`.
 
+## Syncing data from the Pi
+
+`sync.sh` copies new data from the Pi to `./data` with `rsync`, then merges any finished days.
+
+1. Create a `.env` file in the project root (it's git-ignored) with your Pi's SSH address:
+   ```
+   PI=username@hostname.local
+   ```
+2. From the project root, run:
+   ```bash
+   ./sync.sh
+   ```
+
 ## Project structure
 
 ```
@@ -80,15 +96,17 @@ bikeshare-toronto-mcp/
 ├── collector/       # data collector (Python + Dockerfile)
 ├── notebooks/       # data exploration and analysis
 ├── data/            # collected data (git-ignored)
-└── compose.yaml     # Docker Compose setup
+├── compose.yaml     # Docker Compose setup
+└── sync.sh          # copy data from the Pi and merge finished days
 ```
 
 ## Roadmap
 
 - [x] Collect station status every minute
 - [x] Run in Docker
-- [ ] Deploy to Raspberry Pi
-- [ ] Merge each day's snapshots into one file
-- [ ] Back up data off the Pi
+- [x] Deploy to Raspberry Pi
+- [x] Merge each day's snapshots into one file
+- [x] Sync data from the Pi to a local machine
+- [ ] Back up data off-site
 - [ ] MCP server with live station tools
 - [ ] Availability prediction model
