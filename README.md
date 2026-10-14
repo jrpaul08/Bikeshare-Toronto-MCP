@@ -1,18 +1,18 @@
 # Bike Share Toronto MCP
 
-An MCP server that lets AI assistants like Claude answer questions about Bike Share Toronto in plain language, including ones existing apps can't, such as:
+An MCP server that helps Bike Share Toronto commuters plan their trips by asking an AI assistant like Claude in plain language.
+
+Existing apps only show how many bikes and docks a station has right now. This project records station data over time and uses it to predict future availability, so an assistant can answer questions like:
 
 > "Will there be a free dock near my office when I arrive at 9am?"
-
-Existing apps only show how many bikes and docks a station has right now. This project records station data over time and uses it to predict availability in the future.
 
 ## Status
 
 | Part | Status |
 |---|---|
-| **Collector**: records live station data every minute | ✅ Working |
-| **MCP server**: tools for live info, reliability and predictions | 🔜 Planned |
-| **Model**: predicts bike / dock availability | 🔜 Planned |
+| **Collector**: records live station data every minute | Working |
+| **MCP server**: tools for live info, reliability and predictions | Planned |
+| **Model**: predicts bike / dock availability | Planned |
 
 ## How it works
 
@@ -32,7 +32,7 @@ The collector runs 24/7 in Docker on a Raspberry Pi and keeps going if a request
 data/
 ├── station_status/
 │   └── date=2026-10-14/
-│       ├── 20261014T142300Z.parquet   ← one file per snapshot
+│       ├── 20261014T142300Z.parquet   # one file per snapshot
 │       └── ...
 ├── station_information/
 │   └── 2026-10-14.json
