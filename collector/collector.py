@@ -1,8 +1,11 @@
-import requests
-import pandas as pd
 import json
+import logging
+import time
 from datetime import datetime, timezone
 from pathlib import Path
+
+import pandas as pd
+import requests
 
 
 DATA_DIR = Path(__file__).resolve().parent.parent / "data"
@@ -28,13 +31,19 @@ COLUMN_TYPES = {
 }
 
 
+logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
+log = logging.getLogger("collector")
+
+
 def fetch_feed(url):
+    """Download a GBFS feed and return it as a dict. Raises on HTTP errors."""
     response = requests.get(url, timeout=10)
     response.raise_for_status()
     return response.json()
 
 
 def build_status_df(feed, fetched_at):
+    """Turn a station_status feed into a DataFrame with fixed columns and types."""
     df = pd.DataFrame(feed['data']['stations'])
     for col in ["vehicle_types_available", "vehicle_docks_available"]:
         if col in df:
@@ -48,6 +57,7 @@ def build_status_df(feed, fetched_at):
 
 
 def save_snapshot(df, fetched_at):
+    """Write one snapshot to its date folder as Parquet and return the file path."""
     folder = DATA_DIR / "station_status" / f"date={fetched_at:%Y-%m-%d}"
     folder.mkdir(parents=True, exist_ok=True)
 
@@ -59,13 +69,25 @@ def save_snapshot(df, fetched_at):
     return final_path
 
 
-if __name__ == "__main__":
+def collect_station_status_data():
+    """Fetch, build and save one station_status snapshot."""
     fetched_at = datetime.now(timezone.utc)
     feed = fetch_feed(STATUS_URL)
     df = build_status_df(feed, fetched_at)
-    path = save_snapshot(df, fetched_at)
-    print("Saved to", path)
+    return save_snapshot(df, fetched_at)
 
-    check = pd.read_parquet(path)
-    print(check.shape)
-    print(check.dtypes)
+
+def main():
+    """Collect a snapshot at the start of every minute, forever."""
+    log.info("Collector starting up")
+    while True:
+        try:
+            path = collect_station_status_data()
+            log.info("Saved %s", path.name)
+        except Exception:
+            log.exception("Collection failed")
+        time.sleep(60 - time.time() % 60)
+
+
+if __name__ == "__main__":
+    main()
